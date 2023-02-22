@@ -1,0 +1,5 @@
+openzeppelin-contracts/=lib/openzeppelin-contracts/contracts
+@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts
+erc1363-contracts/=lib/erc1363-payable-token/contracts
+forge-std/=lib/forge-std/src
+
