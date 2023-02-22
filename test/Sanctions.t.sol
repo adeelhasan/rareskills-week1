@@ -44,4 +44,16 @@ contract SanctionsTest is TokensTestBase {
         require(token.balanceOf(account2) == 1050);
     }
 
+    function testCannotUpdateIfNotOwner() external {
+        vm.expectRevert();
+        vm.prank(account1);
+        token.updateBlackList(account2, false);
+    }
+
+    function testCannotUpdateZeroAddress() external {
+        vm.expectRevert();
+        vm.prank(owner);
+        token.updateBlackList(address(0), false);
+    }
+
 }

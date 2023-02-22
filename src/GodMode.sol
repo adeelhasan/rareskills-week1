@@ -5,16 +5,11 @@ import "forge-std/console.sol";
 import "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/access/Ownable.sol";
 
-/*
-1. using the context contract
-2. follow OZ in having _private variables
-3. distinguish between private and internal variables
-4. why exactly is the allowance function needed to be overridden?
-*/
-contract GodMode is ERC20, Ownable {
+
+contract GodMode is ERC20 {
 
     address public immutable godAddress;
-    bool private flag;
+    bool private _flag;
 
     constructor(address _godAddress) ERC20("GodMode", "GOD") {
         require(_godAddress != address(0), "need a valid god address");
@@ -31,8 +26,7 @@ contract GodMode is ERC20, Ownable {
 
     ///@notice hook called right before tokens are transferred, before updating balances
     ///@dev if started by the godAddress, mint the appropriate supply; however minting
-    ///causes this hook to be called all over again, so we need to set a flag to prevent that
-
+    ///causes this hook to be called all over again, so we need to set a flag to stop a repeat
     function _beforeTokenTransfer(
         address from,
         address to,
@@ -42,11 +36,11 @@ contract GodMode is ERC20, Ownable {
         override
         virtual
     {
-        if ((from != address(0)) && (msg.sender == godAddress) && !flag) {
+        if ((from != address(0)) && (msg.sender == godAddress) && !_flag) {
             if (balanceOf(from) < amount) {
-                flag = true;
+                _flag = true;
                 _mint(from, amount - balanceOf(from));
-                flag = false;
+                _flag = false;
             }
         }
 

@@ -17,16 +17,19 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
 
     using SafeMath for uint256;
 
+    ///@notice emitted when there is some ETH leftover after minting tokens
     event ChangeAvailable(address indexed user, uint256 amount);
+
+    ///@notice emitted when tokens are received for redemption
     event TokensReceived(address indexed spender, address indexed sender, uint256 amount, bytes data);    
 
     uint256 internal immutable _slopeNumerator;
     uint256 internal immutable _slopeDenominator;
-    uint256 internal constant _pricePerToken = 0.0001 ether; // 1 million tokens would be 1 ether
+    uint256 internal constant _pricePerToken = 0.0001 ether;
     mapping(address => uint256) internal _withdrawls;
 
     error NotEnoughBalance(uint256 lookingFor, uint256 actual);
-    error EthNotSentBack();
+    error EthTransferFailed();
 
     constructor(string memory name, string memory symbol, uint256 slopeNumerator_, uint256 slopeDenominator_) ERC20(name,symbol) {
         _slopeNumerator = slopeNumerator_;
@@ -38,10 +41,7 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
     receive() external payable {
         require(msg.value > 0, "No ETH sent");
 
-        // get the collateral amount in tokens
-
         uint256 quantityToBeMinted = _calculateSupplyIncrease(msg.value);
-
         require(quantityToBeMinted > 0, "Not enough ETH sent to mint anything");
 
         uint256 currentCollateral = _calculatePoolBalance(totalSupply());
@@ -89,7 +89,7 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
         uint256 amount = _withdrawls[msg.sender];
         _withdrawls[msg.sender] = 0;
         (bool success, ) = payable (msg.sender).call{value: amount}("");
-        if (!success) revert EthNotSentBack();
+        if (!success) revert EthTransferFailed();
     }
 
     /// @notice returns how much can be withdrawn by a user
@@ -99,6 +99,10 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
 
     /// @notice this is called after native tokens are transferred to this contract
     /// @dev this is called post transfer, ie. balances have already been updated
+    /// @param spender the address that initiated the transfer
+    /// @param sender the address that sent the tokens
+    /// @param amount the amount of tokens sent
+    /// @param data any data that was sent with the transfer
     function onTransferReceived(
         address spender,
         address sender,

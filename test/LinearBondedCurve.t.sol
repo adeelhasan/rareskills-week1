@@ -78,5 +78,38 @@ contract LinearBondedCurveTest2 is TokensTestBase {
         vm.stopPrank();
     }
 
+    function testBuyTokensWithPreview() external {
+        uint256 expectedMint = token.previewPurchase(0.005 ether);
+
+        vm.prank(account1);
+        (bool success, ) = address(token).call{value: 0.005 ether}("");
+
+        require(token.balanceOf(account1) == expectedMint, "token quantity not as expected");
+
+        expectedMint = expectedMint + token.previewPurchase(0.015 ether);
+
+        (success,) = address(token).call{value: 0.015 ether}("");
+        require(token.totalSupply() == expectedMint, "token supply not as expected");
+    }
+
+    function testSellTokensWithPreview() external {
+        vm.prank(account1);
+        (bool success, ) = address(token).call{value: 0.020 ether}("");
+        require(success, "should have succeeded");
+
+        require(token.balanceOf(account1) == 20, "token quantity not as expected");
+
+        uint256 expectedBalanceIncrease = token.previewRedepemtion(10);
+
+        uint256 balanceBefore = account1.balance;
+        vm.startPrank(account1);
+        token.transferAndCall(address(token), 10);
+        token.withdraw();
+        vm.stopPrank();
+        uint256 balanceAfter = account1.balance;
+
+        require(balanceAfter == balanceBefore + expectedBalanceIncrease, "account1 balance not as expected");
+    }
+
 }
 

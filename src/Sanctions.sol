@@ -22,6 +22,10 @@ contract Sanctions is  ERC20, Ownable  {
     }
 
     ///@notice hook called right before tokens are transferred, ie. before updating balances
+    ///@dev if the sender or recipient is blacklisted, revert
+    ///@param from address tokens are being transferred from
+    ///@param to address tokens are being transferred to
+    ///@param amount amount of tokens being transferred
     function _beforeTokenTransfer(
         address from,
         address to,
