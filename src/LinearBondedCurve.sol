@@ -17,16 +17,16 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
 
     using SafeMath for uint256;
 
-    ///@notice emitted when there is some ETH leftover after minting tokens
+    /// @notice emitted when there is some ETH leftover after minting tokens
     event ChangeAvailable(address indexed user, uint256 amount);
 
-    ///@notice emitted when tokens are received for redemption
+    /// @notice emitted when tokens are received for redemption
     event TokensReceived(address indexed spender, address indexed sender, uint256 amount, bytes data);    
 
     uint256 internal immutable _slopeNumerator;
     uint256 internal immutable _slopeDenominator;
-    uint256 internal constant _pricePerToken = 0.0001 ether;
-    mapping(address => uint256) internal _withdrawls;
+    uint256 internal constant _pricePerToken = 0.0001 ether; // price for a whole token
+    mapping(address => uint256) internal _withdrawlBalances;
 
     error NotEnoughBalance(uint256 lookingFor, uint256 actual);
     error EthTransferFailed();
@@ -44,21 +44,21 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
         uint256 quantityToBeMinted = _calculateSupplyIncrease(msg.value);
         require(quantityToBeMinted > 0, "Not enough ETH sent to mint anything");
 
-        uint256 currentCollateral = _calculatePoolBalance(totalSupply());
-        _mint(msg.sender, quantityToBeMinted);
+        uint256 priorCollateral = _calculatePoolBalance(totalSupply().div(1e18));
+        _mint(msg.sender, quantityToBeMinted * 10**decimals());
 
-        uint256 collateralDelta = _calculatePoolBalance(totalSupply()) - currentCollateral;
+        uint256 collateralDelta = _calculatePoolBalance(totalSupply().div(1e18)) - priorCollateral;
 
         uint256 actualCost = collateralDelta.mul(_pricePerToken);
         if (actualCost < msg.value) {
-            _withdrawls[msg.sender] += msg.value - actualCost;
+            _withdrawlBalances[msg.sender] += msg.value - actualCost;
             emit ChangeAvailable(msg.sender, msg.value - actualCost);
         }
     }
 
     /// @notice for these tokens quantity, how much collateral do I get
     /// @dev preview only, just does the calculation
-    /// @param amount the amount of tokens to be redeemed
+    /// @param amount the amount of tokens to be redeemed, in base units
     function previewRedepemtion(uint256 amount) external view returns (uint256) {
         return _calculateRedemptionValue(amount);
     }
@@ -73,28 +73,26 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
     /// @notice exchange tokens held by msg.sender for collateral
     /// @dev this does not need to transfer to itself first, instead it burns it directly
     /// @param amount the amount of tokens to redeem
-    function redeem(uint amount) external {
+    function redeem(uint256 amount) external {
         if (amount > balanceOf(msg.sender)) revert NotEnoughBalance(amount, balanceOf(msg.sender));
 
         uint256 saleProceedsInEth = _calculateRedemptionValue(amount);
-
         // any exit tax will be collected here
         _burn(msg.sender, amount);
-
-        _withdrawls[msg.sender] += saleProceedsInEth;
+        _withdrawlBalances[msg.sender] += saleProceedsInEth;
     }
 
     /// @notice withdraws the available ETH balance for a user
     function withdraw() external {
-        uint256 amount = _withdrawls[msg.sender];
-        _withdrawls[msg.sender] = 0;
+        uint256 amount = _withdrawlBalances[msg.sender];
+        _withdrawlBalances[msg.sender] = 0;
         (bool success, ) = payable (msg.sender).call{value: amount}("");
         if (!success) revert EthTransferFailed();
     }
 
     /// @notice returns how much can be withdrawn by a user
     function getBalanceAvailable() external view returns (uint256) {
-        return _withdrawls[msg.sender];
+        return _withdrawlBalances[msg.sender];
     }
 
     /// @notice this is called after native tokens are transferred to this contract
@@ -113,7 +111,7 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
 
         uint256 saleProceedsInEth = _calculateRedemptionValue(amount);
         _burn(address(this), amount);
-        _withdrawls[sender] += saleProceedsInEth;
+        _withdrawlBalances[sender] += saleProceedsInEth;
 
         emit TokensReceived(spender, sender, amount, data);
 
@@ -122,26 +120,29 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
 
     /// @notice by how much would the supply increase for given amount of bonded tokens
     /// @dev convert from eth to quantity to add as area under the curve
-    /// @param amount ETH value of collateral to be added
+    /// @param amount ETH value of collateral to be added in wei
+    /// @return the amount of tokens to be minted, in base units
     function _calculateSupplyIncrease(uint256 amount) internal view returns (uint256) {
-        uint256 collateralIncreaseInTokens = amount.div(_pricePerToken);
-        return Math.sqrt((collateralIncreaseInTokens + _calculatePoolBalance(totalSupply())).mul(2)) - totalSupply();
+        uint256 collateralIncreaseInTokens = amount.div(_pricePerToken); //pricing is already in wei
+        return Math.sqrt(collateralIncreaseInTokens.mul(2).mul(_slopeDenominator).div(_slopeNumerator) + (totalSupply().div(1e18))**2) - totalSupply().div(1e18);
     }
 
     /// @notice calculates how much collateral will be returned for a given amount of tokens
-    /// @param quantityOfTokens the amount of tokens to sell
-    function _calculateRedemptionValue(uint256 quantityOfTokens) internal view returns (uint256) {
-        uint256 saleProceedsInTokens = _calculatePoolBalance(totalSupply()) - ((totalSupply() - quantityOfTokens)**2).div(2);
+    /// @param amount the amount of tokens to sell, in base units
+    /// @return the amount of collateral to be returned, in wei
+    function _calculateRedemptionValue(uint256 amount) internal view returns (uint256) {
+        uint256 saleProceedsInTokens = _calculatePoolBalance(totalSupply().div(1e18)) - _calculatePoolBalance(totalSupply().div(1e18) - amount.div(1e18));
         uint256 saleProceedsInEth = saleProceedsInTokens * _pricePerToken;
         return saleProceedsInEth;
     }
 
-    /// @notice calculates the area under the curve
+    /// @notice calculates the area under the curve, which are bonded tokens
     /// @dev formular is just for a triangle area : base * height * 1/2 * slope
-    /// @param supply the supply to base the calculation on    
+    /// @param supply the supply to base the calculation on, in whole units
+    /// @return result the area under the curve, in whole units
     function _calculatePoolBalance(uint256 supply) internal view returns (uint256 result) {
         uint256 base = supply;
-        uint256 height = supply.mul(_slopeNumerator).div(_slopeDenominator);
+        uint256 height = base.mul(_slopeNumerator).div(_slopeDenominator);
         result = base.mul(height).div(2);
     }
 

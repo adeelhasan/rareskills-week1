@@ -16,7 +16,7 @@ contract GodMode is ERC20 {
         godAddress = _godAddress;
     }
 
-    ///@notice fudges the allowance when the spender is the god address
+    /// @notice fudges the allowance when the spender is the god address
     function allowance(address owner, address spender) public view virtual override returns (uint256) {
         if (spender == godAddress)
             return type(uint256).max;
@@ -24,9 +24,9 @@ contract GodMode is ERC20 {
         return super.allowance(owner, spender);
     }
 
-    ///@notice hook called right before tokens are transferred, before updating balances
-    ///@dev if started by the godAddress, mint the appropriate supply; however minting
-    ///causes this hook to be called all over again, so we need to set a flag to stop a repeat
+    /// @notice hook called right before tokens are transferred, before updating balances
+    /// @dev if started by the godAddress, mint the appropriate supply; however minting
+    /// causes this hook to be called all over again, so we need to set a flag to stop a repeat
     function _beforeTokenTransfer(
         address from,
         address to,
