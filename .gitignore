@@ -12,3 +12,5 @@ out/
 
 #in-development-files
 /src/ignore
+
+/echidna-config.yaml

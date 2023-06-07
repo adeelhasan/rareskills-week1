@@ -147,3 +147,11 @@ contract LinearBondedCurve is ERC1363, IERC1363Receiver, Ownable {
     }
 
 }
+
+
+contract LinearBondedCurveEchidnaTest is LinearBondedCurve {
+    constructor() LinearBondedCurve("ECHD", "ECH", 1, 1) {}
+    function echidna_test_reserve() external view returns (bool result) {
+        return address(this).balance >= _pricePerToken * balanceOf(address(this));
+    }
+}
