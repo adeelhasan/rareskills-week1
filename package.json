@@ -1,0 +1,7 @@
+{
+  "name": "hardhat-project",
+  "devDependencies": {
+    "@openzeppelin/hardhat-upgrades": "^1.27.0",
+    "chai": "^4.3.7"
+  }
+}

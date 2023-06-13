@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "openzeppelin-contracts/token/ERC20/ERC20.sol";
-import "openzeppelin-contracts/access/Ownable.sol";
+import "openzeppelin-contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract Sanctions is  ERC20, Ownable  {
+contract SanctionsUpgradeableV0 is  Initializable, ERC20Upgradeable, OwnableUpgradeable {
 
     mapping (address => bool) private blackList;
 
     /// @dev fixed supply of 10 tokens
-    constructor() ERC20("Sanctions", "SAN") {
+    function initialize() external initializer {
+        __ERC20_init("Sanctions", "SAN");
+        __Ownable_init();
         _mint(msg.sender, 10e18);
     }
 
